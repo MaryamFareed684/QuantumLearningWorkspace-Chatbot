@@ -21,9 +21,24 @@ dev = [
   "httpx>=0.27.0,<1.0.0",
 ]
 
+[tool.setuptools]
+py-modules = [
+  "main",
+  "auth",
+  "cache",
+  "chunked_retrieval",
+  "chunker",
+  "rag_service",
+  "rate_limiter",
+  "schemas",
+  "timing_logger",
+  "vector_store"
+]
+
 [tool.pytest.ini_options]
-testpaths = ["rag-engine/tests"]
-pythonpath = ["rag-engine"]
+testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--ignore=rag_venv"
+
 [tool.fastapi]
 entrypoint = "main:app"
