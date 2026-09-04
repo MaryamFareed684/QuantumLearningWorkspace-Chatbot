@@ -25,6 +25,5 @@ dev = [
 testpaths = ["rag-engine/tests"]
 pythonpath = ["rag-engine"]
 addopts = "--ignore=rag_venv"
-
 [tool.fastapi]
-entrypoint = "rag-engine/main.py"
+entrypoint = "main:app"
