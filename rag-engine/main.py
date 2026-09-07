@@ -37,6 +37,12 @@ from rag_service import (
 )
 from schemas import AskRequest, AskResponse, HealthResponse, SourceItem, TimingInfo
 from auth import get_current_user_email
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from ingestion.main import app as ingestion_app
+
 from timing_logger import TimingRecord
 
 _engine: RagEngine | None = None
@@ -358,6 +364,8 @@ app = FastAPI(
     version="0.5.0",
     lifespan=lifespan,
 )
+
+app.mount("/ingestion", ingestion_app)
 
 app.add_middleware(
     CORSMiddleware,

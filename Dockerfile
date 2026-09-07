@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY rag-engine/ ./rag-engine/
+COPY embedding/ ./embedding/
+COPY ingestion/ ./ingestion/
+COPY quiz_generator/ ./quiz_generator/
 
 WORKDIR /app/rag-engine
 
