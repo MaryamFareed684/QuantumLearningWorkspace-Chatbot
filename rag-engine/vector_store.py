@@ -77,7 +77,7 @@ def retrieve(
       - metadatas: list[dict] | None
       - ids: list[str] | None
     """
-    question_embedding = embedding_model.encode(question).tolist()
+    question_embedding = embedding_model.encode(question, normalize_embeddings=True).tolist()
     query_kwargs: dict[str, Any] = {
         "query_embeddings": [question_embedding],
         "n_results": n_results,
