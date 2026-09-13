@@ -21,16 +21,15 @@ def load_embedding_model(model_name: str = DEFAULT_MODEL_NAME) -> SentenceTransf
     return SentenceTransformer(model_name)
 
 
-DEFAULT_CHROMA_PATH = os.getenv(
-    "CHROMA_DB_PATH",
-    r"C:\Dev\QuantumLearningWorkspace\shared_chroma_data",
-)
 
 
 def create_collection(name: str = DEFAULT_COLLECTION_NAME, path: str = None):
     """Get or create a persistent Chroma collection shared across services."""
-    resolved_path = path or os.getenv("CHROMA_DB_PATH", DEFAULT_CHROMA_PATH)
-    client = chromadb.PersistentClient(path=resolved_path)
+    client = chromadb.CloudClient(
+        api_key=os.getenv("CHROMA_API_KEY"),
+        tenant=os.getenv("CHROMA_TENANT"),
+        database=os.getenv("CHROMA_DATABASE"),
+    )
     return client.get_or_create_collection(name=name)
 
 
