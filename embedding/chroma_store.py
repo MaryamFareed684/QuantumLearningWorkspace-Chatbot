@@ -29,15 +29,15 @@ from embedding.model import get_embedding_model
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
 
-DEFAULT_CHROMA_PATH = os.getenv(
-    "CHROMA_DB_PATH",
-    r"C:\Dev\QuantumLearningWorkspace\shared_chroma_data",
-)
 DEFAULT_COLLECTION_NAME = "study_chunks"
 
 
 def get_collection(name: str = DEFAULT_COLLECTION_NAME, path: str = None):
-    client = chromadb.PersistentClient(path=path or DEFAULT_CHROMA_PATH)
+    client = chromadb.CloudClient(
+        api_key=os.getenv("CHROMA_API_KEY"),
+        tenant=os.getenv("CHROMA_TENANT"),
+        database=os.getenv("CHROMA_DATABASE"),
+    )
     return client.get_or_create_collection(name=name)
 
 
