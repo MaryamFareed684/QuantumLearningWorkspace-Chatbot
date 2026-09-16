@@ -1,4 +1,29 @@
 
+## Phase 11 at a Glance
+
+Phase 11 wrapped up the retrieval-quality and conversation-quality work on top of the Phase 10 semantic-first pipeline. Each item has a dedicated section below; the overview tracks what landed and what is still open.
+
+| Item | What landed | Status |
+|---|---|---|
+| 1. Retrieval comparison + clarifying-question flow | Hybrid (semantic + BM25/RRF) retrieval path with an A/B against semantic; `clarify.py` vague-question gate | Landed — see "Hybrid Search A/B" and "Clarifying-Question Flow" below |
+| 2. Page-number citations | `page` field flows retrieval → `SourceInfo`/`SourceItem` → `citations.py` rendering | Landed (mu-side) — pending Team Lambda's ingestion fix to actually emit `page` |
+| 3. Conversation quality | `POST /conversations/summarize` + history compaction (older turns summarized instead of hard-dropped) | Landed — see "Conversation Quality" below |
+| 4. Eval suite expansion | Main suite 15 → 35 cases, new `must_ask_clarification` expectation, targeted 18-case regression runner | Landed — see "Eval suite expansion" below |
+| 5. Flashcard–chatbot connection | Feasibility-only investigation (stateless design; no Team Lambda flashcard API exists to query) | Parked — needs a scoped ask to Team Lambda first |
+
+### Eval suite expansion (item 4)
+
+- `eval/cases.json` grew from the **15 shared cases** used in the hybrid A/B to **35 cases**, including **7 clarification cases** and **5 multi-hop cases** (3 of the multi-hop cases are new).
+- Case expectations now support a **`must_ask_clarification`** field: `eval/eval_suite.py` asserts `result.needed_clarification` matches it (the full pipeline diff vs `ask()`), and `eval/run_regression.py` skips clarification cases since they are covered by the unit suite.
+- A targeted **`eval/cases_regression.json`** (18 cases = 15 original Phase 7 cases + 3 new multi-hop cases) backs `python eval/run_regression.py` — a throttled, faster check against real Groq for the non-clarification subset.
+- Latest full-suite run: `eval/eval_report.md` — **31/33 PASS** (2 failures were clarification cases later addressed by the heuristic widening below).
+
+### Clarification heuristic widening
+
+The vague-question detector (`clarify.py`) flags a question as vague when it has no informative content tokens. The `NON_INFORMATIVE` term set in `bm25.py` was widened with **`explain further go else`** so that discourse-only follow-ups like "go on", "explain further", or "what else?" are treated as content-free and correctly prompt for clarification. This is the fix behind the two `must_ask_clarification` cases that initially failed in `eval/eval_report.md`.
+
+---
+
 ## Retrieval Strategy (Phase 10)
 
 Our retrieval pipeline uses a **semantic-first approach** with **LLM re-ranking**.
@@ -92,6 +117,8 @@ When a user asks a question that is too vague to retrieve or answer meaningfully
 | `test_ask_returns_clarifying_message_without_llm` | full ask() pipeline | needed_clarification=True, correct message |
 | `test_ask_clarification_returns_clarifying_message` | /ask endpoint mock | CLARIFICATION_MESSAGE in response |
 | `test_ask_stream_clarification_metadata_done` | /ask/stream endpoint mock | metadata with is_clarification=True |
+
+> **Widened heuristic (Phase 11 item 4):** `NON_INFORMATIVE` in `bm25.py` additionally treats `explain / further / go / else` as non-content, so follow-ups like "go on", "explain further", and "what else?" are now flagged vague. See "Clarification heuristic widening" in the Phase 11 overview above.
 
 ---
 
