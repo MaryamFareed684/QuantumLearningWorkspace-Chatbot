@@ -13,3 +13,4 @@ yt_dlp
 youtube-transcript-api
 trafilatura
 lxml_html_clean
+python-multipart
