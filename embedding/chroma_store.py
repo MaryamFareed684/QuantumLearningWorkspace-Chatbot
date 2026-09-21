@@ -67,12 +67,17 @@ def store_chunks(chunks: list[dict], user_id: str, document_id: str, title: str)
     ]
     embeddings = model.encode(documents)  # list[list[float]], already normalized
 
-    collection.upsert(
+    try:
+        collection.upsert(
         ids=ids,
         embeddings=embeddings,
         documents=documents,
-        metadatas=metadatas,
-    )
+            metadatas=metadatas,
+        )
+        print(f"CHROMA_UPSERT_OK: stored {len(chunks)} chunks for user_id={user_id!r} document_id={document_id}", flush=True)
+    except Exception as e:
+        print(f"CHROMA_UPSERT_ERROR: {type(e).__name__}: {e}", flush=True)
+        raise
     return len(chunks)
 
 
