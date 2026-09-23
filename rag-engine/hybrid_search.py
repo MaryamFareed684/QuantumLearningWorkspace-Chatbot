@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bm25 import BM25Index
-from vector_store import DEFAULT_TOP_K, retrieve
+from vector_store import DEFAULT_TOP_K, build_scope_where, retrieve
 
 RRF_CONSTANT = 60.0
 # How many candidates each side contributes before fusion.
@@ -33,13 +33,19 @@ class LexicalIndex:
         return self.bm25.size
 
 
-def _collection_fingerprint(collection, user_id: str | None, limit: int = LEXICAL_MAX_DOCS) -> tuple:
+def _collection_fingerprint(
+    collection,
+    user_id: str | None,
+    limit: int = LEXICAL_MAX_DOCS,
+    document_id: str | None = None,
+    document_name: str | None = None,
+) -> tuple:
     """Read all scoped rows once; returns a (fingerprint, rows) pair.
 
     The fingerprint is the sorted id set so the cache can cheaply detect
     indexing changes (new uploads) without re-building the whole index.
     """
-    where = {"user_id": user_id} if user_id else None
+    where = build_scope_where(user_id or None, document_id, document_name)
     rows = collection.get(
         where=where,
         include=["documents", "metadatas"],
@@ -50,11 +56,18 @@ def _collection_fingerprint(collection, user_id: str | None, limit: int = LEXICA
     return fingerprint, rows
 
 
-def get_bm25_index(engine, user_id: str | None = None) -> LexicalIndex:
+def get_bm25_index(
+    engine,
+    user_id: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
+) -> LexicalIndex:
     """Build (or retrieve cached) lexical index for the engine's collection."""
     collection = engine.collection
     coll_name = getattr(collection, "name", "?")
-    fingerprint, rows = _collection_fingerprint(collection, user_id)
+    fingerprint, rows = _collection_fingerprint(
+        collection, user_id, document_id=document_id, document_name=document_name
+    )
     cached = getattr(engine, "_lexical_cache", None)
     if cached is not None and cached[0] == fingerprint:
         return cached[1]
@@ -110,6 +123,8 @@ def hybrid_retrieve(
     n_results: int = DEFAULT_TOP_K,
     user_id: str | None = None,
     semantic_pool: int | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
     lexical_pool: int | None = None,
 ) -> dict[str, Any]:
     """
@@ -131,10 +146,14 @@ def hybrid_retrieve(
         question,
         n_results=pool,
         user_id=user_id,
+        document_id=document_id,
+        document_name=document_name,
     )
     sem_ids = list(semantic.get("ids") or [])
 
-    lex = get_bm25_index(engine, user_id=user_id)
+    lex = get_bm25_index(
+        engine, user_id=user_id, document_id=document_id, document_name=document_name
+    )
     ranked = sorted(lex.bm25.score(question).items(), key=lambda kv: kv[1], reverse=True)
     lex_ids = [cid for cid, _score in ranked[:lex_pool]]
 
