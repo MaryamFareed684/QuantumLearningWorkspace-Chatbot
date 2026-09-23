@@ -113,6 +113,8 @@ def _cache_key(body: AskRequest, user_email: str) -> str:
         body.rerank,
         body.multi_hop,
         body.include_sources,
+        document_id=body.document_id,
+        document_name=body.filename,
     )
 
     
@@ -330,6 +332,8 @@ def _stream_ask(
             rerank=body.rerank,
             multi_hop=body.multi_hop,
             user_id=user_email,
+            document_id=body.document_id,
+            document_name=body.filename,
         )
         timing.end_retrieval()
     except (ValueError, RuntimeError) as exc:
@@ -626,6 +630,8 @@ def ask_endpoint(
             rerank=body.rerank,
             multi_hop=body.multi_hop,
             user_id=current_user_email,
+            document_id=body.document_id,
+            document_name=body.filename,
         )
         timing.end_retrieval()
 

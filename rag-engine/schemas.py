@@ -48,6 +48,22 @@ class AskRequest(BaseModel):
         default=False,
         description="Bypass the in-memory answer cache for this request",
     )
+    document_id: str | None = Field(
+        default=None,
+        max_length=128,
+        description=(
+            "Limit retrieval to one of the user's documents (chunk metadata "
+            "document_id). Omit to search all of the user's documents."
+        ),
+    )
+    filename: str | None = Field(
+        default=None,
+        max_length=512,
+        description=(
+            "Fallback scope when document_id is unknown: the uploaded filename "
+            "(chunk metadata 'document'). Ignored when document_id is set."
+        ),
+    )
 
     @field_validator("question")
     @classmethod

@@ -527,10 +527,13 @@ def merge_results(accumulated: dict[str, Any], new: dict[str, Any]) -> dict[str,
         seen.add(cid)
         docs.append(new_docs[i] if i < len(new_docs) else "")
         ids.append(cid)
-        if dists is not None and new_dists is not None and i < len(new_dists):
-            dists.append(new_dists[i])
-        if metas is not None and new_metas is not None and i < len(new_metas):
-            metas.append(new_metas[i])
+        # Keep every parallel list the same length as `docs`, so chunk i's
+        # metadata (document name, page) can never shift onto chunk i+1 and
+        # show the wrong source.
+        if dists is not None:
+            dists.append(new_dists[i] if new_dists is not None and i < len(new_dists) else None)
+        if metas is not None:
+            metas.append(new_metas[i] if new_metas is not None and i < len(new_metas) else {})
 
     return {
         "documents": docs,
@@ -968,6 +971,23 @@ def finalize_ask(
     return _prepared_to_ask_result(prepared, answer, grounded)
 
 
+def _scope_kwargs(document_id: str | None, document_name: str | None) -> dict[str, str]:
+    """Document-scope kwargs, passed only when set so unscoped calls stay unchanged."""
+    scope: dict[str, str] = {}
+    if document_id:
+        scope["document_id"] = document_id
+    elif document_name:
+        scope["document_name"] = document_name
+    return scope
+
+
+DOCUMENT_NOT_READY_MESSAGE = (
+    "I couldn't find any content for the selected document yet. If you just "
+    "uploaded it, it may still be processing; please try again in a moment, "
+    "or choose All Documents."
+)
+
+
 def prepare_ask(
     engine: RagEngine,
     question: str,
@@ -978,6 +998,8 @@ def prepare_ask(
     multi_hop: bool | None = None,
     user_id: str | None = None,
     retrieval_method: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
 ) -> PreparedAsk:
     """
     Run rewrite → multi-hop retrieve → relevance gate.
@@ -1003,6 +1025,30 @@ def prepare_ask(
             refused=True,
             refusal_answer=NO_DOCUMENTS_MESSAGE,
             no_documents=True,
+            include_sources=include_sources,
+            client=None,
+        )
+
+    # Scoped to one document: make sure that document (for this user) has chunks,
+    # instead of silently falling back to searching every document.
+    if (
+        user_id is not None
+        and (document_id or document_name)
+        and not user_has_documents(
+            engine.collection, user_id,
+            document_id=document_id, document_name=document_name,
+        )
+    ):
+        return PreparedAsk(
+            question=cleaned,
+            history=hist,
+            top_k=k,
+            rewritten_question=cleaned,
+            hop_queries=[],
+            retrieved_text="",
+            accumulated={"documents": [], "distances": [], "ids": [], "metadatas": []},
+            refused=True,
+            refusal_answer=DOCUMENT_NOT_READY_MESSAGE,
             include_sources=include_sources,
             client=None,
         )
@@ -1057,6 +1103,7 @@ def prepare_ask(
         round_results, client = _retrieve_round(
             engine, client, current_query, k, do_rerank,
             user_id=user_id, retrieval_method=method,
+            **_scope_kwargs(document_id, document_name),
         )
         if round_idx == 0 and not _round_relevant(
             method, round_results, engine.max_distance
@@ -1121,6 +1168,8 @@ def _retrieve_round(
     do_rerank: bool,
     user_id: str | None = None,
     retrieval_method: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
 ) -> tuple[dict[str, Any], Groq | None]:
     method = _resolve_retrieval_method(retrieval_method)
     n_retrieve = RERANK_CANDIDATE_COUNT if do_rerank else k
@@ -1131,6 +1180,7 @@ def _retrieve_round(
             query,
             n_results=n_retrieve,
             user_id=user_id,
+            **_scope_kwargs(document_id, document_name),
         )
     else:
         results = retrieve(
@@ -1139,6 +1189,7 @@ def _retrieve_round(
             query,
             n_results=n_retrieve,
             user_id=user_id,
+            **_scope_kwargs(document_id, document_name),
         )
     if do_rerank and len(results.get("ids") or []) > k:
         if client is None:
@@ -1161,6 +1212,8 @@ def ask(
     multi_hop: bool | None = None,
     user_id: str | None = None,
     retrieval_method: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
 ) -> AskResult:
     """
     Full pipeline: prepare → sync answer → finalize (grounding).
@@ -1175,6 +1228,8 @@ def ask(
         multi_hop=multi_hop,
         user_id=user_id,
         retrieval_method=retrieval_method,
+        document_id=document_id,
+        document_name=document_name,
     )
     if prepared.refused:
         if update_history and history is not None:

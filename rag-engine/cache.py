@@ -95,6 +95,8 @@ class AnswerCache:
         rerank: bool | None,
         multi_hop: bool | None,
         include_sources: bool | None = True,
+        document_id: str | None = None,
+        document_name: str | None = None,
     ) -> str:
         payload = {
             "user_id": (user_id or "").strip(),
@@ -105,6 +107,12 @@ class AnswerCache:
             "multi_hop": multi_hop,
             "include_sources": include_sources,
         }
+        # Only added for document-scoped questions, so keys for unscoped
+        # questions stay exactly as before and existing entries remain valid.
+        if document_id:
+            payload["document_id"] = document_id
+        elif document_name:
+            payload["document_name"] = document_name
         normalized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
