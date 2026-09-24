@@ -59,16 +59,45 @@ def add_chunks(
     )
 
 
+def build_scope_where(
+    user_id: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Chroma `where` filter for a user, optionally narrowed to one document.
+
+    document_id (the chunk metadata "document_id") is preferred; document_name
+    (the chunk metadata "document", i.e. the uploaded filename) is a fallback
+    for clients that only know the filename. The user filter is always kept,
+    so a document id from another user can never match.
+    """
+    conditions: list[dict[str, Any]] = []
+    if user_id is not None:
+        conditions.append({"user_id": user_id})
+    if document_id:
+        conditions.append({"document_id": document_id})
+    elif document_name:
+        conditions.append({"document": document_name})
+    if not conditions:
+        return None
+    if len(conditions) == 1:
+        return conditions[0]
+    return {"$and": conditions}
+
+
 def retrieve(
     collection,
     embedding_model: SentenceTransformer,
     question: str,
     n_results: int = DEFAULT_TOP_K,
     user_id: str | None = None,
+    document_id: str | None = None,
+    document_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Query the collection for the top-n chunks matching the question,
-    optionally scoped to a single user_id.
+    optionally scoped to a single user_id and, within it, one document.
 
     Returns a dict with:
       - documents: list[str]
@@ -81,8 +110,9 @@ def retrieve(
         "query_embeddings": [question_embedding],
         "n_results": n_results,
     }
-    if user_id is not None:
-        query_kwargs["where"] = {"user_id": user_id}
+    where = build_scope_where(user_id, document_id, document_name)
+    if where is not None:
+        query_kwargs["where"] = where
 
     results = collection.query(**query_kwargs)
 
@@ -109,7 +139,12 @@ def is_relevant(
     return min(distances) <= max_distance
 
 
-def user_has_documents(collection, user_id: str) -> bool:
+def user_has_documents(
+    collection,
+    user_id: str,
+    document_id: str | None = None,
+    document_name: str | None = None,
+) -> bool:
     """
     Check whether a given user has ANY chunks stored at all,
     regardless of the question being asked.
@@ -117,7 +152,9 @@ def user_has_documents(collection, user_id: str) -> bool:
     Used to distinguish "no documents uploaded yet" from
     "documents exist but nothing matched this question."
     """
-    result = collection.get(where={"user_id": user_id}, limit=1)
+    result = collection.get(
+        where=build_scope_where(user_id, document_id, document_name), limit=1
+    )
     return len(result.get("ids", [])) > 0
 
 
