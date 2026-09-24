@@ -68,8 +68,11 @@ def _chunk_and_store(result: dict, user_id: str) -> dict:
 # -----------------------------
 # PDF INGESTION
 # -----------------------------
+# Plain "def" on purpose: FastAPI runs it in a worker thread. Extracting,
+# chunking and embedding a large PDF is blocking work; as "async def" it ran on
+# the event loop and the whole service stopped answering until it finished.
 @app.post("/ingest/pdf")
-async def ingest_pdf_endpoint(
+def ingest_pdf_endpoint(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
 ):

@@ -34,6 +34,9 @@ DEFAULT_CHROMA_PATH = os.getenv(
     r"C:\Dev\QuantumLearningWorkspace\shared_chroma_data",
 )
 DEFAULT_COLLECTION_NAME = "study_chunks"
+# A large PDF produces hundreds of chunks; upserting them in one request can
+# exceed the vector store's per-request limits, so they are sent in batches.
+UPSERT_BATCH_SIZE = 100
 
 
 def get_collection(name: str = DEFAULT_COLLECTION_NAME, path: str = None):
@@ -68,12 +71,14 @@ def store_chunks(chunks: list[dict], user_id: str, document_id: str, title: str)
     embeddings = model.encode(documents)  # list[list[float]], already normalized
 
     try:
-        collection.upsert(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-            metadatas=metadatas,
-        )
+        for start in range(0, len(ids), UPSERT_BATCH_SIZE):
+            end = start + UPSERT_BATCH_SIZE
+            collection.upsert(
+                ids=ids[start:end],
+                embeddings=embeddings[start:end],
+                documents=documents[start:end],
+                metadatas=metadatas[start:end],
+            )
         print(f"CHROMA_UPSERT_OK: stored {len(chunks)} chunks for user_id={user_id!r} document_id={document_id}", flush=True)
     except Exception as e:
         print(f"CHROMA_UPSERT_ERROR: {type(e).__name__}: {e}", flush=True)
