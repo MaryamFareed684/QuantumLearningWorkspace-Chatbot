@@ -40,7 +40,30 @@ UPSERT_BATCH_SIZE = 100
 
 
 def get_collection(name: str = DEFAULT_COLLECTION_NAME, path: str = None):
-    client = chromadb.PersistentClient(path=path or DEFAULT_CHROMA_PATH)
+    """
+    Chroma Cloud when CHROMA_API_KEY is set: the same store the chat
+    (rag-engine), quiz, roadmap and knowledge-graph services read from.
+
+    This used to be a local PersistentClient, so in production every upload was
+    written to the ingestion container's own disk: invisible to all other
+    services and wiped on each redeploy. The local store is now only used for
+    local development (no CHROMA_API_KEY) or when a path is passed explicitly.
+    """
+    if path is None and os.getenv("CHROMA_API_KEY"):
+        client = chromadb.CloudClient(
+            api_key=os.getenv("CHROMA_API_KEY"),
+            tenant=os.getenv("CHROMA_TENANT"),
+            database=os.getenv("CHROMA_DATABASE"),
+        )
+    else:
+        local_path = path or DEFAULT_CHROMA_PATH
+        print(
+            f"CHROMA_WARNING: using a local ChromaDB at {local_path!r}. Other services "
+            "read from Chroma Cloud; set CHROMA_API_KEY, CHROMA_TENANT and "
+            "CHROMA_DATABASE in production.",
+            flush=True,
+        )
+        client = chromadb.PersistentClient(path=local_path)
     return client.get_or_create_collection(name=name)
 
 
