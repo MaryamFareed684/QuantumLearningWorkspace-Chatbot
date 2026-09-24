@@ -787,16 +787,24 @@ def add_user_document(
     """
     Chunk and index a single document into the shared engine, scoped to user_id.
     Used for per-user uploads (Phase 8), separate from the startup demo corpus.
-    Chunk ids are prefixed with user_id to avoid collisions if two users upload
-    files with the same name (or the same demo fixture, as in local testing).
+    Chunk ids are "{document_id}_{chunk id}", where document_id is derived from
+    the user and the file's content: two different files never share chunk ids
+    (previously a user's second PDF overwrote the first one's "pdf_chunk_*"
+    chunks), while re-adding the same file still upserts the same ids. Chunks
+    carry document_id and document (file name without extension), matching the
+    ingestion service, so document-scoped retrieval and source attribution work.
     Returns the number of chunks indexed.
     """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Document not found: {path}")
+    import hashlib
+
+    document_id = hashlib.sha256(user_id.encode("utf-8") + b"\0" + path.read_bytes()).hexdigest()[:32]
     chunks = chunk_file(path)
     for chunk in chunks:
-        chunk["id"] = f"{user_id}__{chunk['id']}"
+        chunk["id"] = f"{document_id}_{chunk['id']}"
+        chunk["metadata"] = {**chunk["metadata"], "document_id": document_id, "document": path.stem}
     add_chunks(engine.collection, engine.embedding_model, chunks, user_id=user_id)
     engine.chunks_indexed += len(chunks)
     return len(chunks)
